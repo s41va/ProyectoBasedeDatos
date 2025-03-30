@@ -1,0 +1,379 @@
+Jugadores que hayan jugado a mayor de una cierta altura y en qué ciudad fué.
+
+
+
+select distinct 
+    j.nombre AS jugador,
+    t.ciudad AS ciudad,
+    t.altura_nivel_mar AS altura
+from
+    jugadores j
+    join equipos e ON j.cod_jugador = e.cod_jugador1 OR j.cod_jugador = e.cod_jugador2
+    join partidos p ON e.cod_equipo = p.equipo_local OR e.cod_equipo = p.equipo_visitante
+    join torneos t ON p.cod_torneos_partidos = t.cod_torneo
+where 
+    t.altura_nivel_mar > 1000
+order by 
+    t.altura_nivel_mar DESC, j.nombre;
+
+
+Consulta todos los partidos de un torneo indicando la ciudad, fecha y hora y si es un partido masculino o femenino y quienes jugaron en ese partido.
+
+
+select 
+    t.ciudad AS ciudad,
+    p.`fecha/hora` AS fecha_hora,
+    p.`Masc/Fem` AS tipo_partido,
+    j1.nombre AS jugador1_equipo_local,
+    j2.nombre AS jugador2_equipo_local,
+    j3.nombre AS jugador1_equipo_visitante,
+    j4.nombre AS jugador2_equipo_visitante
+from
+    partidos p
+    join torneos t ON p.cod_torneos_partidos = t.cod_torneo
+    join equipos e1 ON p.equipo_local = e1.cod_equipo
+    join  equipos e2 ON p.equipo_visitante = e2.cod_equipo
+    join jugadores j1 ON e1.cod_jugador1 = j1.cod_jugador
+    join jugadores j2 ON e1.cod_jugador2 = j2.cod_jugador
+    join jugadores j3 ON e2.cod_jugador1 = j3.cod_jugador
+    join jugadores j4 ON e2.cod_jugador2 = j4.cod_jugador
+WHERE t.cod_torneo = 1 or t.cod_torneo = 8  
+ORDER BY p.`fecha/hora`;
+
+Encuentra los nombres de los jugadores que han jugado en torneos donde la temperatura media  
+es mayor que el promedio de todas las temperaturas medias de los torneos, junto con la ciudad del torneo.
+
+select distinct 
+    j.nombre AS jugador,
+    t.ciudad AS ciudad,
+    t.temperatura_media AS temperatura
+from 
+    jugadores j
+    join equipos e ON j.cod_jugador = e.cod_jugador1 OR j.cod_jugador = e.cod_jugador2
+    join partidos p ON e.cod_equipo = p.equipo_local OR e.cod_equipo = p.equipo_visitante
+    join torneos t ON p.cod_torneos_partidos = t.cod_torneo
+where 
+    t.temperatura_media > (
+        SELECT AVG(temperatura_media)
+        FROM torneos
+        WHERE temperatura_media IS NOT NULL
+    )
+ORDER BY 
+    t.temperatura_media DESC, j.nombre;
+    
+   
+ Lista los partidos (con su fecha, ciudad y tipo) donde el equipo ganador tiene al menos un jugador con
+ categoría pro (en la columna pro/novel de jugadores).  
+ 
+select 
+    p.cod_partido,
+    t.ciudad,
+    p.`fecha/hora` as fecha_hora,
+    p.`Masc/Fem` as tipo_partido
+from
+    partidos p
+    join torneos t on p.cod_torneos_partidos = t.cod_torneo
+where 
+    p.ganador in (
+        select e.cod_equipo
+        from equipos e
+        join jugadores j1 on e.cod_jugador1 = j1.cod_jugador
+        join jugadores j2 on e.cod_jugador2 = j2.cod_jugador
+        where j1.`pro/novel` = 'pro' OR j2.`pro/novel` = 'pro'
+    )
+ORDER BY 
+    p.`fecha/hora`;
+    
+   
+Listar los nombres de los jugadores que han jugado en torneos donde la humedad (torneos.humedad)
+es mayor que la humedad promedio de todos los torneos, junto con la ciudad del torneo.   
+  
+select distinct 
+    j.nombre AS jugador,
+    t.ciudad AS ciudad,
+    t.humedad AS humedad
+from
+    jugadores j
+    join equipos e ON j.cod_jugador = e.cod_jugador1 OR j.cod_jugador = e.cod_jugador2
+    join partidos p ON e.cod_equipo = p.equipo_local OR e.cod_equipo = p.equipo_visitante
+    join torneos t ON p.cod_torneos_partidos = t.cod_torneo
+where 
+    t.humedad > (
+        select AVG(humedad)
+        from torneos
+        where humedad is not null
+    ) 
+order by
+    t.humedad desc, j.nombre;
+   
+   
+   
+   
+VISTAS
+
+--1 vista resumen de todos los partidos 
+
+
+CREATE VIEW vista_resumen_partidos AS
+SELECT 
+    p.cod_partido,
+    t.ciudad AS ciudad,
+    p.`fecha/hora` AS fecha_hora,
+    p.`Masc/Fem` AS tipo_partido,
+    j1.nombre AS jugador1_equipo_local,
+    j2.nombre AS jugador2_equipo_local,
+    j3.nombre AS jugador1_equipo_visitante,
+    j4.nombre AS jugador2_equipo_visitante
+FROM 
+    partidos p
+    INNER JOIN torneos t ON p.cod_torneos_partidos = t.cod_torneo
+    INNER JOIN equipos e1 ON p.equipo_local = e1.cod_equipo
+    INNER JOIN equipos e2 ON p.equipo_visitante = e2.cod_equipo
+    INNER JOIN jugadores j1 ON e1.cod_jugador1 = j1.cod_jugador
+    INNER JOIN jugadores j2 ON e1.cod_jugador2 = j2.cod_jugador
+    INNER JOIN jugadores j3 ON e2.cod_jugador1 = j3.cod_jugador
+    INNER JOIN jugadores j4 ON e2.cod_jugador2 = j4.cod_jugador
+ORDER BY 
+    p.`fecha/hora`;
+  
+   
+   
+--2 vista del rankin masculino general   
+   
+create view vista_rank_masc as 
+   select j.nombre, j.ranking 
+   from jugadores j 
+   where j.`M/F` = 'M'
+   order by j.ranking;
+
+  
+ 
+  
+FUNCIONES
+  
+-1  
+  
+
+DELIMITER //
+
+CREATE FUNCTION ObtenerVictoriasJugador(p_cod_jugador INT) 
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE victorias INT;
+    
+    -- Contar los partidos ganados por el jugador
+    SELECT COUNT(p.cod_partido) INTO victorias
+    FROM jugadores j
+    INNER JOIN equipos e ON j.cod_jugador = e.cod_jugador1 OR j.cod_jugador = e.cod_jugador2
+    INNER JOIN partidos p ON e.cod_equipo = p.ganador
+    WHERE j.cod_jugador = p_cod_jugador;
+    
+    -- Devolver el resultado
+    RETURN victorias;
+END //
+
+DELIMITER ;
+
+select ObtenerVictoriasJugador(6);
+
+
+
+DELIMITER //
+
+CREATE FUNCTION ObtenerPorcentajeVictoriasEquipo(p_cod_equipo INT) 
+RETURNS DECIMAL(5,2)
+DETERMINISTIC
+BEGIN
+    DECLARE partidos_jugados INT;
+    DECLARE partidos_ganados INT;
+    DECLARE porcentaje DECIMAL(5,2);
+    
+    -- Contar los partidos jugados por el equipo (como local o visitante)
+    SELECT COUNT(*) INTO partidos_jugados
+    FROM partidos p
+    WHERE p.equipo_local = p_cod_equipo OR p.equipo_visitante = p_cod_equipo;
+    
+    -- Contar los partidos ganados por el equipo
+    SELECT COUNT(*) INTO partidos_ganados
+    FROM partidos p
+    WHERE p.ganador = p_cod_equipo;
+    
+    -- Calcular el porcentaje de victorias
+    IF partidos_jugados > 0 THEN
+        SET porcentaje = (partidos_ganados * 100.0) / partidos_jugados;
+    ELSE
+        SET porcentaje = 0.0;
+    END IF;
+    
+    -- Devolver el resultado
+    RETURN porcentaje;
+END //
+
+DELIMITER ;
+   
+select ObtenerPorcentajeVictoriasEquipo(1);
+
+
+
+
+
+PROCEDIMIENTOS
+
+--1 Crear un procedimiento que actualice el ranking de un 
+jugador específico en la tabla jugadores según un nuevo valor proporcionado.
+
+DELIMITER //
+
+CREATE PROCEDURE ActualizarRankingJugador(
+    IN p_cod_jugador INT,
+    IN p_nuevo_ranking INT
+)
+BEGIN
+    -- Actualizar el ranking del jugador
+    UPDATE jugadores
+    SET ranking = p_nuevo_ranking
+    WHERE cod_jugador = p_cod_jugador;
+    
+    -- Verificar si se actualizó algún registro
+    IF ROW_COUNT() = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Error: No se encontró un jugador con el cod_jugador proporcionado.';
+    END IF;
+END //
+
+DELIMITER ;
+
+
+--2 Crear un procedimiento que actualice el ranking de un jugador específico en la 
+tabla jugadores según un nuevo valor proporcionado.
+
+
+DELIMITER //
+
+CREATE PROCEDURE EliminarPartidosTorneo(
+    IN p_cod_torneo INT
+)
+BEGIN
+    -- Eliminar los partidos del torneo especificado
+    DELETE FROM partidos
+    WHERE cod_torneos_partidos = p_cod_torneo;
+    
+    -- Verificar si se eliminó algún registro
+    IF ROW_COUNT() = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'No se encontraron partidos para el torneo especificado.';
+    END IF;
+END //
+
+DELIMITER ;
+
+
+--3 Crear un procedimiento que permita agregar un nuevo jugador a la tabla jugadores con los datos básicos 
+(nombre, edad, DNI, país, lugar de residencia, ranking, género, categoría y posición).
+
+DELIMITER //
+
+CREATE PROCEDURE AgregarJugador(
+    IN p_cod_jugador INT,
+    IN p_nombre VARCHAR(45),
+    IN p_edad INT,
+    IN p_DNI VARCHAR(45),
+    IN p_Pais VARCHAR(45),
+    IN p_lugar_residencia VARCHAR(45),
+    IN p_ranking INT,
+    IN p_M_F VARCHAR(45),
+    IN p_pro_novel VARCHAR(45),
+    IN p_posicion_pista VARCHAR(45)
+)
+BEGIN
+    -- Insertar el nuevo jugador
+    INSERT INTO jugadores (
+        cod_jugador, nombre, edad, DNI, Pais, lugar_residencia, 
+        ranking, `M/F`, `pro/novel`, posicion_pista
+    )
+    VALUES (
+        p_cod_jugador, p_nombre, p_edad, p_DNI, p_Pais, p_lugar_residencia, 
+        p_ranking, p_M_F, p_pro_novel, p_posicion_pista
+    );
+    
+    -- Verificar si la inserción fue exitosa
+    IF ROW_COUNT() = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Error: No se pudo agregar el jugador.';
+    END IF;
+END //
+
+DELIMITER ;
+
+
+
+
+
+TRIGGERS
+
+
+--1 Crear un trigger que, cada vez que se inserte un nuevo jugador en la tabla jugadores, 
+registre un mensaje en una tabla de auditoría con los detalles del jugador insertado.
+
+CREATE TABLE auditoria_jugadores (
+    id_auditoria INT AUTO_INCREMENT PRIMARY KEY,
+    cod_jugador INT,
+    nombre VARCHAR(45),
+    accion VARCHAR(45),
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+    mensaje VARCHAR(255)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+DELIMITER //
+
+CREATE TRIGGER after_jugador_insert
+AFTER INSERT ON jugadores
+FOR EACH ROW
+BEGIN
+    -- Insertar un registro en la tabla de auditoría
+    INSERT INTO auditoria_jugadores (cod_jugador, nombre, accion, mensaje)
+    VALUES (
+        NEW.cod_jugador,
+        NEW.nombre,
+        'INSERT',
+        CONCAT('Nuevo jugador registrado: ', NEW.nombre, ' (ID: ', NEW.cod_jugador, ')')
+    );
+END //
+
+DELIMITER ;
+
+--2 Crear un trigger que, cada vez que se actualice la fecha de un torneo en la tabla torneos,
+asegure que la nueva fecha no sea anterior a la fecha actual (27 de marzo de 2025). Si la fecha 
+es anterior, el trigger la ajustará automáticamente a la fecha actual.
+
+DELIMITER //
+
+CREATE TRIGGER before_torneo_update
+BEFORE UPDATE ON torneos
+FOR EACH ROW
+BEGIN
+    -- Verificar si la nueva fecha es anterior a la fecha actual (27 de marzo de 2025)
+    IF NEW.fecha < '2025-03-27' THEN
+        SET NEW.fecha = '2025-03-27';
+    END IF;
+END //
+
+DELIMITER ;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+TRIGGERS
