@@ -1,0 +1,344 @@
+
+CONSULTAS
+--1
+select distinct
+   j.nombre AS jugador,
+   c.ciudad AS ciudad,
+   c.altura_nivel_mar AS altura
+from
+   jugadores j
+   join equipos e ON j.cod_jugador = e.cod_jugador1 OR j.cod_jugador = e.cod_jugador2
+   join partidos p ON e.cod_equipo = p.equipo_local OR e.cod_equipo = p.equipo_visitante
+   join torneos t ON p.cod_torneos_partidos = t.cod_torneo
+   join ciudad c on t.cod_ciudad = c.cod_ciudad 
+where
+   c.altura_nivel_mar > 1000
+order by
+   c.altura_nivel_mar DESC, j.nombre;
+   
+  
+--2
+
+SELECT 
+    c.ciudad,
+    p.fecha_hora,
+    t.cod_torneo 
+FROM 
+    partidos p
+    JOIN torneos t ON p.cod_torneos_partidos = t.cod_torneo
+    JOIN ciudad c ON t.cod_ciudad = c.cod_ciudad
+WHERE 
+    c.ciudad = 'Miami'
+ORDER BY 
+    p.fecha_hora;
+    
+--3
+
+select distinct
+   j.nombre AS jugador,
+   c.ciudad AS ciudad,
+   c.temperatura_media AS temperatura
+from
+   jugadores j
+   join equipos e ON j.cod_jugador = e.cod_jugador1 OR j.cod_jugador = e.cod_jugador2
+   join partidos p ON e.cod_equipo = p.equipo_local OR e.cod_equipo = p.equipo_visitante
+   join torneos t ON p.cod_torneos_partidos = t.cod_torneo
+   join ciudad c on t.cod_ciudad = c.cod_ciudad 
+where
+   c.temperatura_media > (
+       select AVG(temperatura_media)
+       from ciudad c 
+       where c.temperatura_media is not null
+   )
+order  by
+   c.temperatura_media desc, j.nombre;
+   
+ 
+  --4
+  
+  select 
+     p.cod_partido,
+   c.ciudad,
+   p.fecha_hora as fecha_hora,
+   p.tipodePartido as tipo_partido
+from
+   partidos p
+   join torneos t on p.cod_torneos_partidos = t.cod_torneo
+   join ciudad c on t.cod_ciudad = c.cod_ciudad 
+where
+   p.ganador in (
+       select e.cod_equipo
+       from equipos e
+       join jugadores j1 on e.cod_jugador1 = j1.cod_jugador
+       join jugadores j2 on e.cod_jugador2 = j2.cod_jugador
+       where j1.`pro/novel` = 'pro' OR j2.`pro/novel` = 'pro'
+   )
+ORDER BY
+   p.fecha_hora;
+  
+  --5 
+
+
+SELECT j.cod_jugador, j.nombre, COUNT(*) AS victorias
+FROM partidos p
+JOIN torneos t ON p.cod_torneos_partidos = t.cod_torneo
+JOIN ciudad c ON t.cod_ciudad = c.cod_ciudad
+JOIN equipos e ON p.ganador = e.cod_equipo
+JOIN jugadores j ON j.cod_jugador = e.cod_jugador1 OR j.cod_jugador = e.cod_jugador2
+WHERE c.ciudad = 'Madrid'
+GROUP BY j.cod_jugador, j.nombre
+ORDER BY victorias desc;
+LIMIT 1;
+
+--FUNCIONES
+
+--1
+DELIMITER $$
+
+CREATE FUNCTION obtener_victorias_jugador(nombre_jugador VARCHAR(45))
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE total_victorias INT;
+
+    SELECT COUNT(*)
+    INTO total_victorias
+    FROM partidos p
+    JOIN equipos e ON p.ganador = e.cod_equipo
+    JOIN jugadores j ON j.cod_jugador = e.cod_jugador1 OR j.cod_jugador = e.cod_jugador2
+    WHERE j.nombre = nombre_jugador;
+
+    RETURN total_victorias;
+END$$
+
+--2
+
+delimiter $$
+
+create function contar_partidos_en_ciudad(nombre_ciudad VARCHAR(45))
+returns int
+deterministic
+begin
+    declare total_partidos int;
+
+    select COUNT(*)
+    into total_partidos
+    from partidos p
+    join torneos t on p.cod_torneos_partidos = t.cod_torneo
+    join ciudad c on t.cod_ciudad = c.cod_ciudad
+    where c.ciudad = nombre_ciudad;
+
+    return total_partidos;
+end$$
+
+delimiter ;
+
+
+select contar_partidos_en_ciudad('Lima')  AS total_partidos;
+
+
+
+--PROCEDIMIENTOS
+
+--1
+delimiter $$
+create procedure ObtenerJugadoresPorPais(in pais_busqueda VARCHAR(45))
+begin
+    select *
+    from jugadores j
+    where j.Pais = pais_busqueda;
+end;
+$$
+delimiter ;
+
+call ObtenerJugadoresPorPais('España');
+
+
+
+--2
+delimiter //
+create procedure RegistrarTorneoPorCiudad(
+    in fecha_torneo DATE,
+    in nombre_ciudad VARCHAR(45)
+)
+begin
+    declare ciudad_id INT;
+    declare nuevo_cod_torneo INT;
+
+    select cod_ciudad into ciudad_id
+    from ciudad
+    where ciudad = nombre_ciudad
+    limit 1;
+
+    select IFNULL(MAX(cod_torneo), 0) + 1 into nuevo_cod_torneo
+    from torneos;
+
+    insert into torneos (cod_torneo, fecha, cod_ciudad)
+    values (nuevo_cod_torneo, fecha_torneo, ciudad_id);
+end;
+//
+delimiter ;
+
+
+CALL RegistrarTorneoPorCiudad('2025-08-20', 'Madrid');
+
+
+
+--3
+
+delimiter //
+create procedure AgregarJugador(
+   in p_cod_jugador INT,
+   in p_nombre VARCHAR(45),
+   in p_edad INT,
+   in p_DNI VARCHAR(45),
+   in p_Pais VARCHAR(45),
+   in p_lugar_residencia VARCHAR(45),
+   in p_ranking INT,
+   in p_M_F VARCHAR(45),
+   in p_pro_novel VARCHAR(45),
+   in p_posicion_pista VARCHAR(45)
+)
+begin
+   -- Insertar el nuevo jugador
+   insert into jugadores (
+       cod_jugador, nombre, edad, DNI, Pais, lugar_residencia,
+       ranking, `M/F`, `pro/novel`, posicion_pista
+   )
+   values(
+       p_cod_jugador, p_nombre, p_edad, p_DNI, p_Pais, p_lugar_residencia,
+       p_ranking, p_M_F, p_pro_novel, p_posicion_pista
+   );
+ 
+end //
+delimiter ;
+
+
+call AgregarJugador(802, "Juan", 24, "23566345H", "España","Sevilla", 5, "M", "Novel", "Reves");
+
+--TRIGGERS
+
+--1
+create table auditoria_jugadores (
+   id_auditoria INT AUTO_INCREMENT PRIMARY KEY,
+   cod_jugador INT,
+   nombre VARCHAR(45),
+   accion VARCHAR(45),
+   fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+   mensaje VARCHAR(255)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+DELIMITER //
+
+create trigger after_jugador_insert
+after insert on jugadores
+for each row
+begin
+   -- Insertar un registro en la tabla de auditoría
+   insert into auditoria_jugadores (cod_jugador, nombre, accion, mensaje)
+   values(
+       new.cod_jugador,
+       new.nombre,
+       'INSERT',
+       CONCAT('Nuevo jugador registrado: ', new.nombre, ' (ID: ', new.cod_jugador, ')')
+   );
+end //
+DELIMITER ;
+
+--2
+
+delimiter //
+create trigger fecha_torneo_comprobar
+before update on torneos
+for each row
+begin
+    
+    if new.fecha < CURDATE() then
+        set new.fecha = CURDATE();
+    end if;
+end;
+//
+delimiter ;
+
+
+VISTAS
+
+--1
+
+create view vista_resumen_partidos as
+select
+  p.cod_partido,
+  p.fecha_hora as fecha_hora_partido,
+  c.ciudad as ciudad,
+  t.fecha as fecha_torneo,
+  el.cod_equipo as equipo_local_id,
+  jl1.nombre as jugador_local_1,
+  jl2.nombre as jugador_local_2,
+  ev.cod_equipo as equipo_visitante_id,
+  jv1.nombre as jugador_visitante_1,
+  jv2.nombre as jugador_visitante_2,
+  p.ganador as cod_equipo_ganador,
+  case 
+    when p.ganador = el.cod_equipo then 'Equipo Local'
+    when p.ganador = ev.cod_equipo then 'Equipo Visitante'
+    else 'Desconocido'
+  end as equipo_ganador
+from partidos p
+join torneos t on p.cod_torneos_partidos = t.cod_torneo
+join ciudad c on t.cod_ciudad = c.cod_ciudad
+join equipos el on p.equipo_local = el.cod_equipo
+join jugadores jl1 on el.cod_jugador1 = jl1.cod_jugador
+join jugadores jl2 on el.cod_jugador2 = jl2.cod_jugador
+join equipos ev on p.equipo_visitante = ev.cod_equipo
+join jugadores jv1 on ev.cod_jugador1 = jv1.cod_jugador
+join jugadores jv2 on ev.cod_jugador2 = jv2.cod_jugador;
+
+--2
+
+create view vista_rank_masc as
+  select j.nombre, j.ranking
+  from jugadores j
+  where j.`M/F` = 'M'
+  order by j.ranking;
+
+
+---RESOLVER FECHAS
+
+
+ALTER TABLE partidos CHANGE `fecha/hora` fecha_hora DATETIME;
+
+UPDATE partidos p
+JOIN torneos t ON p.cod_torneos_partidos = t.cod_torneo
+SET p.fecha_hora = CONCAT(t.fecha, ' 12:00:00');
+
+
+
+
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
